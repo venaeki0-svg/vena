@@ -1,5 +1,7 @@
-
 import React, { useState, useEffect } from 'react';
+import { AuthProvider, useAuth } from './components/AuthProvider';
+import SupabaseLogin from './components/SupabaseLogin';
+import { profileService } from './services/supabaseService';
 import { ViewType, Client, Project, TeamMember, Transaction, Package, AddOn, TeamProjectPayment, Profile, FinancialPocket, TeamPaymentRecord, Lead, RewardLedgerEntry, User, Card, Asset, ClientFeedback, Contract, RevisionStatus, NavigationAction, Notification, QRCodeRecord, SocialMediaPost, PromoCode, SOP } from './types';
 import { MOCK_CLIENTS, MOCK_PROJECTS, MOCK_TEAM_MEMBERS, MOCK_TRANSACTIONS, MOCK_PACKAGES, MOCK_ADDONS, MOCK_TEAM_PROJECT_PAYMENTS, MOCK_USER_PROFILE, MOCK_FINANCIAL_POCKETS, MOCK_TEAM_PAYMENT_RECORDS, MOCK_LEADS, MOCK_REWARD_LEDGER_ENTRIES, MOCK_USERS, MOCK_CARDS, MOCK_ASSETS, MOCK_CLIENT_FEEDBACK, MOCK_CONTRACTS, MOCK_NOTIFICATIONS, MOCK_QR_CODES, MOCK_SOCIAL_MEDIA_POSTS, MOCK_PROMO_CODES, MOCK_SOPS, HomeIcon, FolderKanbanIcon, UsersIcon, DollarSignIcon, PlusIcon } from './constants';
 import Sidebar from './components/Sidebar';
@@ -30,6 +32,191 @@ import SocialPlanner from './components/SocialPlanner';
 import PromoCodes from './components/PromoCodes';
 import SOPManagement from './components/SOP';
 import DigitalSignatureVerification from './components/DigitalSignatureVerification';
+
+const AppContent: React.FC = () => {
+  const { user, loading, signOut } = useAuth();
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [activeView, setActiveView] = useState<ViewType>(ViewType.DASHBOARD);
+  const [notification, setNotification] = useState<string>('');
+  const [initialAction, setInitialAction] = useState<NavigationAction | null>(null);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [route, setRoute] = useState(window.location.hash);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+
+  useEffect(() => {
+    const handleHashChange = () => {
+        setRoute(window.location.hash);
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+
+  // Load user profile from Supabase
+  useEffect(() => {
+    if (user) {
+      // Create a mock user object from Supabase user
+      const mockUser: User = {
+        id: user.id,
+        email: user.email || '',
+        password: '', // Not needed for authenticated user
+        fullName: user.user_metadata?.full_name || user.email || '',
+        role: 'Admin', // Default to Admin for now
+        permissions: undefined,
+      };
+      setCurrentUser(mockUser);
+    }
+  }, [user]);
+
+  // Lifted State for global management and integration
+  const [users, setUsers] = useState<User[]>(() => JSON.parse(JSON.stringify(MOCK_USERS)));
+  const [clients, setClients] = useState<Client[]>(() => JSON.parse(JSON.stringify(MOCK_CLIENTS)));
+  const [projects, setProjects] = useState<Project[]>(() => JSON.parse(JSON.stringify(MOCK_PROJECTS)));
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>(() => JSON.parse(JSON.stringify(MOCK_TEAM_MEMBERS)));
+  const [transactions, setTransactions] = useState<Transaction[]>(() => JSON.parse(JSON.stringify(MOCK_TRANSACTIONS)));
+  const [packages, setPackages] = useState<Package[]>(() => JSON.parse(JSON.stringify(MOCK_PACKAGES)));
+  const [addOns, setAddOns] = useState<AddOn[]>(() => JSON.parse(JSON.stringify(MOCK_ADDONS)));
+  const [teamProjectPayments, setTeamProjectPayments] = useState<TeamProjectPayment[]>(() => JSON.parse(JSON.stringify(MOCK_TEAM_PROJECT_PAYMENTS)));
+  const [teamPaymentRecords, setTeamPaymentRecords] = useState<TeamPaymentRecord[]>(() => JSON.parse(JSON.stringify(MOCK_TEAM_PAYMENT_RECORDS)));
+  const [pockets, setPockets] = useState<FinancialPocket[]>(() => JSON.parse(JSON.stringify(MOCK_FINANCIAL_POCKETS)));
+  const [profile, setProfile] = useState<Profile>(() => JSON.parse(JSON.stringify(MOCK_USER_PROFILE)));
+  const [leads, setLeads] = useState<Lead[]>(() => JSON.parse(JSON.stringify(MOCK_LEADS)));
+  const [rewardLedgerEntries, setRewardLedgerEntries] = useState<RewardLedgerEntry[]>(() => JSON.parse(JSON.stringify(MOCK_REWARD_LEDGER_ENTRIES)));
+  const [cards, setCards] = useState<Card[]>(() => JSON.parse(JSON.stringify(MOCK_CARDS)));
+  const [assets, setAssets] = useState<Asset[]>(() => JSON.parse(JSON.stringify(MOCK_ASSETS)));
+  const [contracts, setContracts] = useState<Contract[]>(() => JSON.parse(JSON.stringify(MOCK_CONTRACTS)));
+  const [clientFeedback, setClientFeedback] = useState<ClientFeedback[]>(() => JSON.parse(JSON.stringify(MOCK_CLIENT_FEEDBACK)));
+  const [notifications, setNotifications] = useState<Notification[]>(() => JSON.parse(JSON.stringify(MOCK_NOTIFICATIONS)));
+  const [qrCodes, setQrCodes] = useState<QRCodeRecord[]>(() => JSON.parse(JSON.stringify(MOCK_QR_CODES)));
+  const [socialMediaPosts, setSocialMediaPosts] = useState<SocialMediaPost[]>(() => JSON.parse(JSON.stringify(MOCK_SOCIAL_MEDIA_POSTS)));
+  const [promoCodes, setPromoCodes] = useState<PromoCode[]>(() => JSON.parse(JSON.stringify(MOCK_PROMO_CODES)));
+  const [sops, setSops] = useState<SOP[]>(() => JSON.parse(JSON.stringify(MOCK_SOPS)));
+
+  // Load profile from Supabase on mount
+  useEffect(() => {
+    const loadProfile = async () => {
+      try {
+        const supabaseProfile = await profileService.get();
+        setProfile(supabaseProfile);
+      } catch (error) {
+        console.error('Error loading profile:', error);
+        // Keep using mock data if Supabase fails
+      }
+    };
+
+    if (user) {
+      loadProfile();
+    }
+  }, [user]);
+
+  const showNotification = (message: string, duration: number = 3000) => {
+    setNotification(message);
+    setTimeout(() => {
+      setNotification('');
+    }, duration);
+  };
+
+  const handleLogout = async () => {
+    try {
+      await signOut();
+      setCurrentUser(null);
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
+  };
+
+  const handleMarkAsRead = (notificationId: string) => {
+    setNotifications(prev => prev.map(n => n.id === notificationId ? { ...n, isRead: true } : n));
+  };
+  
+  const handleMarkAllAsRead = () => {
+    setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+  };
+
+  const handleNavigation = (view: ViewType, action?: NavigationAction, notificationId?: string) => {
+    setActiveView(view);
+    setInitialAction(action || null);
+    setIsSidebarOpen(false);
+    setIsSearchOpen(false);
+    if (notificationId) {
+        handleMarkAsRead(notificationId);
+    }
+  };
+
+  const handleUpdateRevision = (projectId: string, revisionId: string, updatedData: { freelancerNotes: string, driveLink: string, status: RevisionStatus }) => {
+    setProjects(prevProjects => {
+        return prevProjects.map(p => {
+            if (p.id === projectId) {
+                const updatedRevisions = (p.revisions || []).map(r => {
+                    if (r.id === revisionId) {
+                        return { 
+                            ...r, 
+                            freelancerNotes: updatedData.freelancerNotes,
+                            driveLink: updatedData.driveLink,
+                            status: updatedData.status,
+                            completedDate: updatedData.status === RevisionStatus.COMPLETED ? new Date().toISOString() : r.completedDate,
+                        };
+                    }
+                    return r;
+                });
+                return { ...p, revisions: updatedRevisions };
+            }
+            return p;
+        });
+    });
+    showNotification("Update revisi telah berhasil dikirim.");
+  };
+
+  const handleClientConfirmation = (projectId: string, stage: 'editing' | 'printing' | 'delivery') => {
+    setProjects(prevProjects => {
+        return prevProjects.map(p => {
+            if (p.id === projectId) {
+                const updatedProject = { ...p };
+                if (stage === 'editing') updatedProject.isEditingConfirmedByClient = true;
+                if (stage === 'printing') updatedProject.isPrintingConfirmedByClient = true;
+                if (stage === 'delivery') updatedProject.isDeliveryConfirmedByClient = true;
+                return updatedProject;
+            }
+            return p;
+        });
+    });
+    showNotification("Konfirmasi telah diterima. Terima kasih!");
+  };
+    
+  const handleClientSubStatusConfirmation = (projectId: string, subStatusName: string, note: string) => {
+    setProjects(prevProjects => {
+        return prevProjects.map(p => {
+            if (p.id === projectId) {
+                const confirmed = [...(p.confirmedSubStatuses || []), subStatusName];
+                const notes = { ...(p.clientSubStatusNotes || {}), [subStatusName]: note };
+                return { ...p, confirmedSubStatuses: confirmed, clientSubStatusNotes: notes };
+            }
+            return p;
+        });
+    });
+    showNotification(`Konfirmasi untuk "${subStatusName}" telah diterima.`);
+  };
+
+  const hasPermission = (view: ViewType) => {
+    if (!currentUser) return false;
+    if (currentUser.role === 'Admin') return true;
+    if (view === ViewType.DASHBOARD) return true;
+    return currentUser.permissions?.includes(view) || false;
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-brand-bg">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-accent mx-auto"></div>
+          <p className="mt-4 text-brand-text-secondary">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <SupabaseLogin />;
+  }
 
 const AccessDenied: React.FC<{onBackToDashboard: () => void}> = ({ onBackToDashboard }) => (
     <div className="flex flex-col items-center justify-center h-full text-center p-4">
@@ -101,147 +288,6 @@ const FloatingActionButton: React.FC<{ onAddClick: (type: string) => void }> = (
     );
 };
 
-
-const App: React.FC = () => {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [activeView, setActiveView] = useState<ViewType>(ViewType.DASHBOARD);
-  const [notification, setNotification] = useState<string>('');
-  const [initialAction, setInitialAction] = useState<NavigationAction | null>(null);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [route, setRoute] = useState(window.location.hash);
-  const [isSearchOpen, setIsSearchOpen] = useState(false);
-
-  useEffect(() => {
-    const handleHashChange = () => {
-        setRoute(window.location.hash);
-    };
-    window.addEventListener('hashchange', handleHashChange);
-    return () => window.removeEventListener('hashchange', handleHashChange);
-  }, []);
-
-  // Lifted State for global management and integration
-  const [users, setUsers] = useState<User[]>(() => JSON.parse(JSON.stringify(MOCK_USERS)));
-  const [clients, setClients] = useState<Client[]>(() => JSON.parse(JSON.stringify(MOCK_CLIENTS)));
-  const [projects, setProjects] = useState<Project[]>(() => JSON.parse(JSON.stringify(MOCK_PROJECTS)));
-  const [teamMembers, setTeamMembers] = useState<TeamMember[]>(() => JSON.parse(JSON.stringify(MOCK_TEAM_MEMBERS)));
-  const [transactions, setTransactions] = useState<Transaction[]>(() => JSON.parse(JSON.stringify(MOCK_TRANSACTIONS)));
-  const [packages, setPackages] = useState<Package[]>(() => JSON.parse(JSON.stringify(MOCK_PACKAGES)));
-  const [addOns, setAddOns] = useState<AddOn[]>(() => JSON.parse(JSON.stringify(MOCK_ADDONS)));
-  const [teamProjectPayments, setTeamProjectPayments] = useState<TeamProjectPayment[]>(() => JSON.parse(JSON.stringify(MOCK_TEAM_PROJECT_PAYMENTS)));
-  const [teamPaymentRecords, setTeamPaymentRecords] = useState<TeamPaymentRecord[]>(() => JSON.parse(JSON.stringify(MOCK_TEAM_PAYMENT_RECORDS)));
-  const [pockets, setPockets] = useState<FinancialPocket[]>(() => JSON.parse(JSON.stringify(MOCK_FINANCIAL_POCKETS)));
-  const [profile, setProfile] = useState<Profile>(() => JSON.parse(JSON.stringify(MOCK_USER_PROFILE)));
-  const [leads, setLeads] = useState<Lead[]>(() => JSON.parse(JSON.stringify(MOCK_LEADS)));
-  const [rewardLedgerEntries, setRewardLedgerEntries] = useState<RewardLedgerEntry[]>(() => JSON.parse(JSON.stringify(MOCK_REWARD_LEDGER_ENTRIES)));
-  const [cards, setCards] = useState<Card[]>(() => JSON.parse(JSON.stringify(MOCK_CARDS)));
-  const [assets, setAssets] = useState<Asset[]>(() => JSON.parse(JSON.stringify(MOCK_ASSETS)));
-  const [contracts, setContracts] = useState<Contract[]>(() => JSON.parse(JSON.stringify(MOCK_CONTRACTS)));
-  const [clientFeedback, setClientFeedback] = useState<ClientFeedback[]>(() => JSON.parse(JSON.stringify(MOCK_CLIENT_FEEDBACK)));
-  const [notifications, setNotifications] = useState<Notification[]>(() => JSON.parse(JSON.stringify(MOCK_NOTIFICATIONS)));
-  const [qrCodes, setQrCodes] = useState<QRCodeRecord[]>(() => JSON.parse(JSON.stringify(MOCK_QR_CODES)));
-  const [socialMediaPosts, setSocialMediaPosts] = useState<SocialMediaPost[]>(() => JSON.parse(JSON.stringify(MOCK_SOCIAL_MEDIA_POSTS)));
-  const [promoCodes, setPromoCodes] = useState<PromoCode[]>(() => JSON.parse(JSON.stringify(MOCK_PROMO_CODES)));
-  const [sops, setSops] = useState<SOP[]>(() => JSON.parse(JSON.stringify(MOCK_SOPS)));
-
-  const showNotification = (message: string, duration: number = 3000) => {
-    setNotification(message);
-    setTimeout(() => {
-      setNotification('');
-    }, duration);
-  };
-
-  const handleLoginSuccess = (user: User) => {
-    setIsAuthenticated(true);
-    setCurrentUser(user);
-    setActiveView(ViewType.DASHBOARD);
-  };
-
-  const handleLogout = () => {
-    setIsAuthenticated(false);
-    setCurrentUser(null);
-  };
-
-  const handleMarkAsRead = (notificationId: string) => {
-    setNotifications(prev => prev.map(n => n.id === notificationId ? { ...n, isRead: true } : n));
-  };
-  
-  const handleMarkAllAsRead = () => {
-    setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
-  };
-
-  const handleNavigation = (view: ViewType, action?: NavigationAction, notificationId?: string) => {
-    setActiveView(view);
-    setInitialAction(action || null);
-    setIsSidebarOpen(false); // Close sidebar on navigation
-    setIsSearchOpen(false); // Close search on navigation
-    if (notificationId) {
-        handleMarkAsRead(notificationId);
-    }
-  };
-
-  const handleUpdateRevision = (projectId: string, revisionId: string, updatedData: { freelancerNotes: string, driveLink: string, status: RevisionStatus }) => {
-    setProjects(prevProjects => {
-        return prevProjects.map(p => {
-            if (p.id === projectId) {
-                const updatedRevisions = (p.revisions || []).map(r => {
-                    if (r.id === revisionId) {
-                        return { 
-                            ...r, 
-                            freelancerNotes: updatedData.freelancerNotes,
-                            driveLink: updatedData.driveLink,
-                            status: updatedData.status,
-                            completedDate: updatedData.status === RevisionStatus.COMPLETED ? new Date().toISOString() : r.completedDate,
-                        };
-                    }
-                    return r;
-                });
-                return { ...p, revisions: updatedRevisions };
-            }
-            return p;
-        });
-    });
-    showNotification("Update revisi telah berhasil dikirim.");
-  };
-
-    const handleClientConfirmation = (projectId: string, stage: 'editing' | 'printing' | 'delivery') => {
-        setProjects(prevProjects => {
-            return prevProjects.map(p => {
-                if (p.id === projectId) {
-                    const updatedProject = { ...p };
-                    if (stage === 'editing') updatedProject.isEditingConfirmedByClient = true;
-                    if (stage === 'printing') updatedProject.isPrintingConfirmedByClient = true;
-                    if (stage === 'delivery') updatedProject.isDeliveryConfirmedByClient = true;
-                    return updatedProject;
-                }
-                return p;
-            });
-        });
-        showNotification("Konfirmasi telah diterima. Terima kasih!");
-    };
-    
-    const handleClientSubStatusConfirmation = (projectId: string, subStatusName: string, note: string) => {
-        setProjects(prevProjects => {
-            return prevProjects.map(p => {
-                if (p.id === projectId) {
-                    const confirmed = [...(p.confirmedSubStatuses || []), subStatusName];
-                    const notes = { ...(p.clientSubStatusNotes || {}), [subStatusName]: note };
-                    return { ...p, confirmedSubStatuses: confirmed, clientSubStatusNotes: notes };
-                }
-                return p;
-            });
-        });
-        showNotification(`Konfirmasi untuk "${subStatusName}" telah diterima.`);
-    };
-
-
-  const hasPermission = (view: ViewType) => {
-    if (!currentUser) return false;
-    if (currentUser.role === 'Admin') return true;
-    if (view === ViewType.DASHBOARD) return true;
-    return currentUser.permissions?.includes(view) || false;
-  };
-  
   const renderView = () => {
     if (!hasPermission(activeView)) {
         return <AccessDenied onBackToDashboard={() => setActiveView(ViewType.DASHBOARD)} />;
@@ -474,10 +520,6 @@ const App: React.FC = () => {
     />;
   }
   
-  if (!isAuthenticated) {
-    return <Login onLoginSuccess={handleLoginSuccess} users={users} />;
-  }
-
   return (
     <div className="flex h-screen bg-brand-bg text-brand-text-primary">
       <Sidebar 
@@ -518,6 +560,14 @@ const App: React.FC = () => {
       <BottomNavBar activeView={activeView} handleNavigation={handleNavigation} />
       {/* <FloatingActionButton onAddClick={(type) => console.log('Add', type)} /> */}
     </div>
+  );
+};
+
+const App: React.FC = () => {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 };
 
