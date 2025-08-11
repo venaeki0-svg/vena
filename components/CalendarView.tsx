@@ -352,7 +352,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ projects, setProject
              <div className="p-6 border-t border-brand-border">
                  <button onClick={() => setPanelMode('edit')} className="button-primary w-full">Edit Detail Acara</button>
             </div>
-        </>
+        </div>
     );
 
     return (
